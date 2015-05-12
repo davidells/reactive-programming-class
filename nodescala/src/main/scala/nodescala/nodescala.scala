@@ -29,7 +29,12 @@ trait NodeScala {
    *  @param token        the cancellation token
    *  @param body         the response to write back
    */
-  private def respond(exchange: Exchange, token: CancellationToken, response: Response): Unit = ???
+  private def respond(exchange: Exchange, token: CancellationToken, response: Response): Unit = {
+    while (response.hasNext && token.nonCancelled) {
+      exchange.write(response.next())
+    }
+    exchange.close()
+  }
 
   /** A server:
    *  1) creates and starts an http listener
@@ -41,7 +46,21 @@ trait NodeScala {
    *  @param handler        a function mapping a request to a response
    *  @return               a subscription that can stop the server and all its asynchronous operations *entirely*
    */
-  def start(relativePath: String)(handler: Request => Response): Subscription = ???
+  def start(relativePath: String)(handler: Request => Response): Subscription = {
+    val listener = createListener(relativePath)
+    val listenerSubscription = listener.start()
+    val responderSubscription = Future.run() { ct =>
+      async {
+        while (ct.nonCancelled) {
+          val req = await(listener.nextRequest())
+          val request = req._1
+          val exchange = req._2
+          respond(exchange, ct, handler(request))
+        }
+      }
+    }
+    Subscription(listenerSubscription, responderSubscription)
+  }
 
 }
 
