@@ -4,5 +4,6 @@
 **/.settings/**
 
 **/bin/**
-**/project/**
+**/project/project/**
+**/project/target/**
 **/target/**
